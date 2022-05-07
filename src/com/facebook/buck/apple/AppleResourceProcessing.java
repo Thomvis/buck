@@ -223,11 +223,16 @@ public class AppleResourceProcessing {
       Tool lipo,
       Path bundleBinaryPath,
       AppleBundleDestinations destinations,
-      boolean isAppClip) {
+      boolean isAppClip,
+      String minOSVersion) {
+
+    int minMajorVersion = Integer.parseInt(minOSVersion.split("\\.")[0]);
+
     // It's apparently safe to run this even on a non-swift bundle (in that case, no libs
     // are copied over).
     boolean shouldCopySwiftStdlib =
         !bundleExtension.equals(AppleBundleExtension.APPEX.toFileExtension())
+            && minMajorVersion <= 12
             && (!bundleExtension.equals(AppleBundleExtension.FRAMEWORK.toFileExtension())
             && !isAppClip
                 || copySwiftStdlibToFrameworks);

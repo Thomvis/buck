@@ -613,7 +613,8 @@ public class AppleBundle extends AbstractBuildRule
           lipo,
           bundleBinaryPath,
           destinations,
-          isAppClip.orElse(false));
+          isAppClip.orElse(false),
+          minOSVersion);
 
       for (BuildRule extraBinary : extraBinaries) {
         Path outputPath = getBundleBinaryPathForBuildRule(extraBinary);
@@ -669,7 +670,8 @@ public class AppleBundle extends AbstractBuildRule
           lipo,
           bundleBinaryPath,
           destinations,
-          isAppClip.orElse(false));
+          isAppClip.orElse(false),
+          minOSVersion);
     }
 
     // Ensure the bundle directory is archived so we can fetch it later.
@@ -815,7 +817,8 @@ public class AppleBundle extends AbstractBuildRule
         lipo,
         bundleBinaryPath,
         destinations,
-        isAppClip.orElse(false));
+        isAppClip.orElse(false),
+        minOSVersion);
   }
 
   private void copyAnotherCopyOfWatchKitStub(
