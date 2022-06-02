@@ -1451,11 +1451,22 @@ public class ProjectGenerator {
 
       FluentIterable<TargetNode<?>> depTargetNodes = collectRecursiveLibraryDepTargets(targetNode);
 
-      if (includeFrameworks && isFocusedOnTarget) {
-
-        if (!options.shouldAddLinkedLibrariesAsFlags()) {
+      if (isFocusedOnTarget) {
+        if (includeFrameworks && !options.shouldAddLinkedLibrariesAsFlags()) {
           mutator.setFrameworks(getSytemFrameworksLibsForTargetNode(targetNode));
+        } else if (!includeFrameworks) {
+          // NOTE(tvisser): this is a hack to make sure Xcode copies the slice from the xcframework
+          // to the build dir. This resolves an issue when building a specific library
+          // (e.g. HighstreetFirebaseManager) that relies on an xcframework (e.g. Firebase) that caused
+          // the build to fail. (Building the app would work, because the app target depends on all (xc)frameworks.)
+          // I'm not sure what side-effects this change has, but in my limited testing it didn't seem
+          // to change the output (e.g. libHighstreetFirebaseManager.a) at all. Firebase is a shared
+          // framework, it might affect static frameworks differently.
+          mutator.setFrameworks(getPrebuiltXCFrameworksForTargetNode(targetNode));
         }
+      }
+
+      if (includeFrameworks && isFocusedOnTarget) {
 
         if (sharedLibraryToBundle.isPresent()) {
           // Replace target nodes of libraries which are actually constituents of embedded
@@ -2129,6 +2140,23 @@ public class ProjectGenerator {
     frameworksBuilder.addAll(targetNode.getConstructorArg().getFrameworks());
     frameworksBuilder.addAll(targetNode.getConstructorArg().getLibraries());
     return frameworksBuilder.build();
+  }
+
+  private ImmutableSet<FrameworkPath> getPrebuiltXCFrameworksForTargetNode(
+    TargetNode<? extends CommonArg> targetNode) {
+    FluentIterable<TargetNode<?>> allDeps =
+      FluentIterable.from(
+        AppleBuildRules.getRecursiveTargetNodeDependenciesOfTypes(
+          xcodeDescriptions,
+          targetGraph,
+          Optional.of(dependenciesCache),
+          AppleBuildRules.RecursiveDependenciesMode.LINKING,
+          targetNode,
+          xcodeDescriptions.getXCodeDescriptions()));
+
+    return allDeps.filter(this::isPrebuiltXCFrameworkNode).transform(prebuilt ->
+      FrameworkPath.ofSourcePath(((PrebuiltAppleFrameworkDescriptionArg) prebuilt.getConstructorArg()).getFramework()
+    )).toSet();
   }
 
   /**
@@ -4892,6 +4920,16 @@ public class ProjectGenerator {
         .equals(Optional.of(ProductTypes.APP_CLIP.getIdentifier()));
     }
     return false;
+  }
+
+  private boolean isPrebuiltXCFrameworkNode(TargetNode<?> targetNode) {
+    return TargetNodes.castArg(targetNode, PrebuiltAppleFrameworkDescriptionArg.class).map(
+      prebuilt -> {
+        Pattern checkIfXcFrameworkPattern = Pattern.compile(".xcframework$");
+        Matcher frameworkPathMatcher = checkIfXcFrameworkPattern.matcher(prebuilt.getConstructorArg().getFramework().toString());
+        return frameworkPathMatcher.find();
+      }
+    ).orElse(false);
   }
 
   private Optional<SourcePath> getPrefixHeaderSourcePath(CxxLibraryDescription.CommonArg arg) {
